@@ -1,14 +1,15 @@
 <!doctype html>
 <html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Webgl spritesheet</title>
-  <style>
-    html,body{
-      margin: 0;
-      height: 100%;
-      background: #111;
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Webgl spritesheet</title>
+    <style>
+      html,body{
+        margin: 0;
+        height: 100%;
+        background: #111;
+      }
       .hud {
         width: 100px;
         position: absolute;
@@ -21,184 +22,185 @@
         font-size: 20px;
         user-select: none;
       }
-    }
-    canvas {
-      width: 100%;
-      height: 100%;
-      display: block;
-    }
-  </style>
-  <canvas id="canvas"></canvas>
-  <div class="hud" id="hud"></div>
-</head>
+      canvas {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+    </style>
+  </head>
 
-<script>
-(() => {
-  const canvas = document.getElementById('canvas');
-  const gl = canvas.getContext('webgl2');
-  if (!gl) return alert('WebGL2 not supported');
+  <body>
+    <canvas id="canvas"></canvas>
+    <div class="hud" id="hud"></div>
+    <script>
+    (() => {
+      const canvas = document.getElementById('canvas');
+      const gl = canvas.getContext('webgl2');
+      if (!gl) return alert('WebGL2 not supported');
 
-  function resize() {
-    const dpr = Math.min(devicePixelRatio || 1, 2);
-    const w = (canvas.clientWidth  * dpr) | 0;
-    const h = (canvas.clientHeight * dpr) | 0;
-    if (canvas.width !== w || canvas.height !== h) {
-      canvas.width = w; canvas.height = h;
-      gl.viewport(0, 0, w, h);
-    }
-  }
-
-  const vs = `#version 300 es
-  in vec2 a_pos;
-  in vec2 a_uv;
-  out vec2 v_uv;
-  void main(){
-    gl_Position = vec4(a_pos, 0.0, 1.0);
-    v_uv = a_uv;
-  }`;
-
-  const fs = `#version 300 es
-  precision lowp float;
-  uniform sampler2D u_tex;
-  uniform float u_frame;      // 0..22
-  uniform float u_frames;     // 9.0
-  in vec2 v_uv;
-  out vec4 outColor;
-  void main(){
-    float frameW = 1.0 / u_frames;
-    vec2 uv = vec2(v_uv.x * frameW + u_frame * frameW, v_uv.y);
-    outColor = texture(u_tex, uv);
-  }`;
-
-  function createAndCompileShader(type, src){
-    const shader = gl.createShader(type);
-    gl.shaderSource(shader, src);
-    gl.compileShader(shader);
-    if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-      throw new Error(gl.getShaderInfoLog(shader));
-    }
-    return shader;
-  }
-
-  const prog = gl.createProgram();
-  gl.attachShader(prog, createAndCompileShader(gl.VERTEX_SHADER, vs));
-  gl.attachShader(prog, createAndCompileShader(gl.FRAGMENT_SHADER, fs));
-  gl.linkProgram(prog);
-  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
-    throw new Error(gl.getProgramInfoLog(prog));
-  }
-
-  const a_pos = gl.getAttribLocation(prog, 'a_pos');
-  const a_uv = gl.getAttribLocation(prog, 'a_uv');
-
-  const u_tex = gl.getUniformLocation(prog, 'u_tex');
-  const u_frame = gl.getUniformLocation(prog, 'u_frame');
-  const u_frames = gl.getUniformLocation(prog, 'u_frames');
-
-
-  const s = 1; // size in clip space (0.4 = 40% of half-screen)
-  const quadrilateral = new Float32Array([
-    -s,-s, 0,0,
-     s,-s, 1,0,
-    -s, s, 0,1,
-    -s, s, 0,1,
-     s,-s, 1,0,
-     s, s, 1,1,
-  ]);
-
-  const vertexArrayObject = gl.createVertexArray();
-  gl.bindVertexArray(vertexArrayObject);
-
-  const vertexBufferObject = gl.createBuffer();
-  gl.bindBuffer(gl.ARRAY_BUFFER, vertexBufferObject);
-  gl.bufferData(gl.ARRAY_BUFFER, quadrilateral, gl.STATIC_DRAW);
-
-  const stride = 4 * 4; // bytes to skip to reach the next vertex
-  gl.enableVertexAttribArray(a_pos);
-  gl.vertexAttribPointer(a_pos, 2, gl.FLOAT, false, stride, 0);
-  gl.enableVertexAttribArray(a_uv);
-  gl.vertexAttribPointer(a_uv, 2, gl.FLOAT, false, stride, 2 * 4);
-
-  gl.bindVertexArray(null);
-
-  // Load texture
-  const FRAMES = 9;
-  const img = new Image();
-  img.onerror = () => console.error('Failed to load texture');
-  img.src = 'spritesheet_coin_xs.png';
-  img.onload = () => {
-    const tex = gl.createTexture();
-    gl.bindTexture(gl.TEXTURE_2D, tex);
-    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
-
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
-
-    gl.useProgram(prog);
-    gl.uniform1i(u_tex, 0);
-    gl.uniform1f(u_frames, FRAMES);
-
-    gl.enable(gl.BLEND);
-    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-
-    gl.useProgram(prog);
-    gl.bindVertexArray(vertexArrayObject);
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, tex);
-    gl.clearColor(0, 0, 0, 1);
-
-    const fps = 24;
-    const fpsMs = 1000 / fps;
-    let lastFrame = -1;
-
-    function loop(tMs){
-      resize();
-
-      const frame = ((tMs / fpsMs) | 0) % FRAMES;
-
-      if (frame === lastFrame) {
-        requestAnimationFrame(loop);
-        return;
+      function resize() {
+        const dpr = Math.min(devicePixelRatio || 1, 2);
+        const w = (canvas.clientWidth  * dpr) | 0;
+        const h = (canvas.clientHeight * dpr) | 0;
+        if (canvas.width !== w || canvas.height !== h) {
+          canvas.width = w; canvas.height = h;
+          gl.viewport(0, 0, w, h);
+        }
       }
 
-      lastFrame = frame;
-      gl.uniform1f(u_frame, frame);
+      const vs = `#version 300 es
+      in vec2 a_pos;
+      in vec2 a_uv;
+      out vec2 v_uv;
+      void main(){
+        gl_Position = vec4(a_pos, 0.0, 1.0);
+        v_uv = a_uv;
+      }`;
 
-      gl.clear(gl.COLOR_BUFFER_BIT);
-      gl.drawArrays(gl.TRIANGLES, 0, 6);
-      requestAnimationFrame(loop);
-    }
-    requestAnimationFrame(loop);
-  };
+      const fs = `#version 300 es
+      precision lowp float;
+      uniform sampler2D u_tex;
+      uniform float u_frame;      // 0..22
+      uniform float u_frames;     // 9.0
+      in vec2 v_uv;
+      out vec4 outColor;
+      void main(){
+        float frameW = 1.0 / u_frames;
+        vec2 uv = vec2(v_uv.x * frameW + u_frame * frameW, v_uv.y);
+        outColor = texture(u_tex, uv);
+      }`;
 
-  // check image on old Android devices
-  console.log('img', img.width, img.height);
-  console.log('MAX_TEXTURE_SIZE', gl.getParameter(gl.MAX_TEXTURE_SIZE));
+      function createAndCompileShader(type, src){
+        const shader = gl.createShader(type);
+        gl.shaderSource(shader, src);
+        gl.compileShader(shader);
+        if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+          throw new Error(gl.getShaderInfoLog(shader));
+        }
+        return shader;
+      }
 
-})();
-</script>
-<script>
-  const hud = document.getElementById('hud')
+      const prog = gl.createProgram();
+      gl.attachShader(prog, createAndCompileShader(gl.VERTEX_SHADER, vs));
+      gl.attachShader(prog, createAndCompileShader(gl.FRAGMENT_SHADER, fs));
+      gl.linkProgram(prog);
+      if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+        throw new Error(gl.getProgramInfoLog(prog));
+      }
 
-  let frames = 0;
-  let last = performance.now();
-  let fps = 0;
+      const a_pos = gl.getAttribLocation(prog, 'a_pos');
+      const a_uv = gl.getAttribLocation(prog, 'a_uv');
 
-  function tick(now) {
-    frames++;
-    const dt = now - last;
-    if (dt >= 500) {
-      fps = frames * 1000 / dt;
-      frames = 0;
-      last = now;
-      hud.textContent = `FPS: ${fps.toFixed(2)}`
-    }
-    requestAnimationFrame(tick);
-  }
-  requestAnimationFrame(tick);
-</script>
+      const u_tex = gl.getUniformLocation(prog, 'u_tex');
+      const u_frame = gl.getUniformLocation(prog, 'u_frame');
+      const u_frames = gl.getUniformLocation(prog, 'u_frames');
+
+
+      const s = 1; // size in clip space (for example: 0.4 = 40% of half-screen)
+      const quadrilateral = new Float32Array([
+        -s,-s, 0,0,
+        s,-s, 1,0,
+        -s, s, 0,1,
+        -s, s, 0,1,
+        s,-s, 1,0,
+        s, s, 1,1,
+      ]);
+
+      const vertexArrayObject = gl.createVertexArray();
+      gl.bindVertexArray(vertexArrayObject);
+
+      const vertexBufferObject = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, vertexBufferObject);
+      gl.bufferData(gl.ARRAY_BUFFER, quadrilateral, gl.STATIC_DRAW);
+
+      const stride = 4 * 4; // bytes to skip to reach the next vertex
+      gl.enableVertexAttribArray(a_pos);
+      gl.vertexAttribPointer(a_pos, 2, gl.FLOAT, false, stride, 0);
+      gl.enableVertexAttribArray(a_uv);
+      gl.vertexAttribPointer(a_uv, 2, gl.FLOAT, false, stride, 2 * 4);
+
+      gl.bindVertexArray(null);
+
+      // Load texture
+      const FRAMES = 9;
+      const img = new Image();
+      img.onerror = () => console.error('Failed to load texture');
+      img.src = 'spritesheet_coin_xs.png';
+      img.onload = () => {
+        const tex = gl.createTexture();
+        gl.bindTexture(gl.TEXTURE_2D, tex);
+        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+
+        gl.useProgram(prog);
+        gl.uniform1i(u_tex, 0);
+        gl.uniform1f(u_frames, FRAMES);
+
+        gl.enable(gl.BLEND);
+        gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+
+        gl.useProgram(prog);
+        gl.bindVertexArray(vertexArrayObject);
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, tex);
+        gl.clearColor(0, 0, 0, 1);
+
+        const fps = 24;
+        const fpsMs = 1000 / fps;
+        let lastFrame = -1;
+
+        function loop(tMs){
+          resize();
+
+          const frame = ((tMs / fpsMs) | 0) % FRAMES;
+
+          if (frame === lastFrame) {
+            requestAnimationFrame(loop);
+            return;
+          }
+
+          lastFrame = frame;
+          gl.uniform1f(u_frame, frame);
+
+          gl.clear(gl.COLOR_BUFFER_BIT);
+          gl.drawArrays(gl.TRIANGLES, 0, 6);
+          requestAnimationFrame(loop);
+        }
+        requestAnimationFrame(loop);
+      };
+
+      // TODO check image on old Android devices
+      // console.log('img', img.width, img.height);
+      // console.log('MAX_TEXTURE_SIZE', gl.getParameter(gl.MAX_TEXTURE_SIZE));
+
+    })();
+    </script>
+    <script>
+      const hud = document.getElementById('hud')
+
+      let frames = 0;
+      let last = performance.now();
+      let fps = 0;
+
+      function tick(now) {
+        frames++;
+        const dt = now - last;
+        if (dt >= 500) {
+          fps = frames * 1000 / dt;
+          frames = 0;
+          last = now;
+          hud.textContent = `FPS: ${fps.toFixed(2)}`
+        }
+        requestAnimationFrame(tick);
+      }
+      requestAnimationFrame(tick);
+    </script>
+  </body>
 </html>
